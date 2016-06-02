@@ -14,7 +14,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Cet agent met a jour sa fonction de valeur avec value iteration et choisit
+ * ew Cet agent met a jour sa fonction de valeur avec value iteration et choisit
  * ses actions selon la politique calculee.
  *
  * @author laetitiamatignon
@@ -27,7 +27,7 @@ public class ValueIterationAgent extends PlanningValueAgent {
      */
     protected double gamma;
     //*** VOTRE CODE
-    protected HashMap<Etat, Double> map;
+    protected HashMap<Etat, Double> map = new HashMap<>();
 
     /**
      *
@@ -57,24 +57,39 @@ public class ValueIterationAgent extends PlanningValueAgent {
         //lorsque l'on planifie jusqu'a convergence, on arrete les iterations lorsque
         //delta < epsilon 
         this.delta = 0.0;
-        //*** VOTRE CODE
-        HashMap<Etat, Double> previousV = (HashMap<Etat, Double>) this.map.clone();
-
-        for (Etat e : this.mdp.getEtatsAccessibles()) {
-            List<Action> l = mdp.getActionsPossibles(e);
-            Double max_value = null;
-            for (Action a : l) {
-                try {
-                    Map<Etat, Double> possibilites = mdp.getEtatTransitionProba(e, a);
-                    Double value = 0.0;
-                    for (Map.Entry<Etat, Double> entry : possibilites.entrySet()) {
-                        if (possibilites == null || entry.getValue().compareTo(possibilites.getValue()) > 0) {
-                            possibilites = entry;
-                        }
+//        //*** VOTRE CODE
+        try {
+            HashMap<Etat, Double> cloneValues = (HashMap<Etat, Double>) this.map.clone();
+            List<Etat> etats = this.mdp.getEtatsAccessibles();
+            for (Etat e : etats) {
+                List<Action> actions = this.mdp.getActionsPossibles(e);
+                Double maxA = null;
+                for (Action a : actions) {
+                    double somme = this.getSomme(e, a);
+                    if (maxA == null || somme > maxA) {
+                        maxA = somme;
                     }
-                } catch (Exception ex) {
+                }
+                if (maxA != null) {
+                    cloneValues.put(e, maxA);
                 }
             }
+            Double maxDelta = null;
+            for (Etat _e : this.map.keySet()) {
+                double diff = Math.abs(this.getValeur(_e) - cloneValues.get(_e));
+                if (maxDelta == null || diff > maxDelta) {
+                    maxDelta = diff;
+                }
+            }
+            if (maxDelta == null) {
+                this.delta = 0.0;
+            } else {
+                this.delta = maxDelta;
+            }
+            this.map.putAll(cloneValues);
+            this.notifyObs();
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
         }
         // mise a jour vmax et vmin pour affichage du gradient de couleur:
         //vmax est la valeur de max pour tout s de V
@@ -82,6 +97,17 @@ public class ValueIterationAgent extends PlanningValueAgent {
         // ...
         //******************* a laisser a la fin de la methode
         this.notifyObs();
+    }
+
+    public double getSomme(Etat e, Action a) throws Exception {
+        Map<Etat, Double> etats = this.mdp.getEtatTransitionProba(e, a);
+        double somme = 0;
+        for (Etat _e : etats.keySet()) {
+            double T = etats.get(_e);
+            double R = this.mdp.getRecompense(e, a, _e);
+            somme += T * (R + this.gamma * this.getValeur(_e));
+        }
+        return somme;
     }
 
     /**
@@ -102,7 +128,7 @@ public class ValueIterationAgent extends PlanningValueAgent {
     @Override
     public double getValeur(Etat _e) {
         //*** VOTRE CODE
-        return this.map.get(_e);
+        return this.map.get(_e) == null ? 0 : this.map.get(_e);
     }
 
     /**
@@ -112,28 +138,24 @@ public class ValueIterationAgent extends PlanningValueAgent {
      */
     @Override
     public List<Action> getPolitique(Etat _e) {
-        List<Action> l = mdp.getActionsPossibles(_e);
         List<Action> r = new ArrayList<>();
-        Double max_value = null;
 
-        for (Action a : l) {
+        double max_value = -1;
 
+        for (Action a : mdp.getActionsPossibles(_e)) {
+            double value = 0.0;
             try {
-                Map<Etat, Double> possibilites = mdp.getEtatTransitionProba(_e, a);
-                Double value = 0.0;
-                for (Map.Entry<Etat, Double> entry : possibilites.entrySet()) {
-                    value += entry.getValue();
-                }
-                if (max_value == null || value > max_value) {
-                    r.clear();
-                    r.add(a);
-                    max_value = value;
-                } else if (Objects.equals(max_value, value)) {
-                    r.add(a);
-                }
+                value = getSomme(_e, a);
             } catch (Exception ex) {
             }
-
+            if (value >= max_value) {
+                // Meilleure valeur
+                if (value > max_value) {
+                    r.clear();
+                }
+                r.add(a);
+                max_value = value;
+            }
         }
 
         return r;
@@ -143,6 +165,7 @@ public class ValueIterationAgent extends PlanningValueAgent {
     @Override
     public void reset() {
         super.reset();
+        this.map.clear();
         //*** VOTRE CODE
 
         /*-----------------*/
